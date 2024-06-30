@@ -24,8 +24,8 @@ def Potential(M):
     return np.linalg.matrix_power(M, 4)/4 - k * np.linalg.matrix_power(M, 2) / 2
 
 
-def LnAcceptanceProbabilityFunction(A,B):                                       #acceptance probability is given as p(x_{n+1})/p(x_n)
-    tmp = np.real( np.trace( Potential(A) - Potential(B) ) )                    #where x_n is matrix M at n-th step
+def LnAcceptanceProbabilityFunction(A,B):                                                           # acceptance probability is given as p(x_{n+1})/p(x_n)
+    tmp = np.real( np.trace( Potential(A) - Potential(B) ) )                                        # where x_n is matrix M at n-th step
     return - N * tmp
 
 def PlotMatrix(matrix):
@@ -48,7 +48,7 @@ while(1):
     counter += 1
     #print(terminationCounter)
     #print(counter)
-    if counter == 20000:
+    if counter == 20000:                                                                            # TODO: find better way to determine when minimum is found
         break
 
     nextM = M.copy()
@@ -61,8 +61,8 @@ while(1):
 
     lnAcceptanceProbability = LnAcceptanceProbabilityFunction(nextM, M)
 
-    if lnAcceptanceProbability > 0 :        #defined as it is now, lnAcceptanceProbability > 0 means nextM is nearer to the local minimum of potential V than M
-        M = nextM
+    if lnAcceptanceProbability > 0 :                                                                # defined as it is now, lnAcceptanceProbability > 0 means 
+        M = nextM                                                                                   # nextM is nearer to the local minimum of potential V than M
         terminationCounter = 0
     else:
         u = np.random.random()
@@ -70,16 +70,11 @@ while(1):
             M = nextM
     terminationCounter += 1
 
+(evals, U) = np.linalg.eigh(originalM)                                                              # U diagonalizes M
+(evals, V) = np.linalg.eigh(M)                                                                      # V diagonalizes nextM
 
-#U diagonalizes M, V diagonalizes nextM
-#V in the basis where M is diagonal is of the form U.conj().T * V * U
-
-(evals, U) = np.linalg.eigh(originalM)
-(evals, V) = np.linalg.eigh(M)
-
-Udag = np.transpose( np.matrix.conjugate(U) )
+Udag = np.transpose( np.matrix.conjugate(U) )                                                       # V in the basis where M is diagonal is of the form U.conj().T * V * U
 rez = np.matmul( np.matmul(Udag, V), U)
-rez = np.matmul( np.transpose( np.matrix.conjugate(rez) ), rez )
 
 
 #######################################PLOTS#########################################

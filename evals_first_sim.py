@@ -8,8 +8,9 @@ np.set_printoptions(linewidth=large_width)
 
 N = 50
 k = 3
-t = 100
+t = 1000
 dt = 1/1000
+noiseVariance = 1
 
 #==================================EIGENVALUES_&_EIGENVECTORS==================================
 
@@ -19,8 +20,12 @@ def Eigens():
     M = ( M + M.conj().T ) / 2                                                                          #   EVEC0_0 EVEC1_0 EVEC2_0
     (evals, evecs) = np.linalg.eigh(M)                                                                  #   EVEC0_1 EVEC1_1 EVEC2_1
     evals = evals/(np.sqrt(N))                                                                          #   EVEC0_2 EVEC1_2 EVEC2_2
-        
-    return np.concatenate(([evals], evecs), axis = 0)
+    
+    formatEvecs = np.zeros((N,N), dtype=complex)                                                        #arranges eigenvectors so that eigenvector of evals[i] is evecs[i] 
+    for i in range(N):                                                                                  #instead of evecs[:,i] which is default in numpy
+        formatEvecs[i] = evecs[:,i].copy()
+
+    return (evals, evecs)
 
 #==================================EVOLUTION_FUNCTION_&_AUXILIARY_FUNCTIONS====================================
 
@@ -30,12 +35,13 @@ def potentialV(x):
 def potentialDerivative(x):
     return x**3 - k*x
 
-def EigensEvolution(eigens):
-    dB = np.random.normal(0, 1, N)
-    dW = np.random.normal(0, 1/2, (N,N)) + 1j * np.random.normal(0, 1/2, (N,N))
+def EigensEvolution(evals, evecs):
+    dB = np.random.normal(0, noiseVariance, N)
+    dW = np.random.normal(0, noiseVariance/2, (N,N)) + 1j * np.random.normal(0, noiseVariance/2, (N,N))
     dW = ( dW + dW.conj().T ) / 2
 
-    dE = np.zeros((N+1, N), dtype = complex)
+    dEvecs = np.zeros((N, N), dtype = complex)
+    dEvals = np.zeros(N, dtype=float)
 
     for i in range(N):
         suma1 = 0
@@ -43,73 +49,69 @@ def EigensEvolution(eigens):
         suma3 = np.zeros(N, dtype = complex)
         for j in range(N):
             if i != j:
-                delta = 1/(eigens[0,i] - eigens[0,j])
-                delta_stoch = dW[i,j] * eigens[1:N+1, j] * delta
+                delta = 1/(evals[i] - evals[j])
+                delta_stoch = dW[i,j] * evecs[j] * delta
 
                 suma1 += delta
                 suma2 += delta**2
                 suma3 += delta_stoch
 
-        dE[0,i] = - potentialDerivative(eigens[0,i]) * dt + (1/N) * suma1 * dt + (1/np.sqrt(N)) * dB[i]
-        dE[1:N+1, i] = - (1/(2*N)) * suma2 * eigens[1:N+1, i] * dt + (1/np.sqrt(N)) * suma3
+        dEvals[i] = - potentialDerivative(evals[i]) * dt + (1/N) * suma1 * dt + (1/np.sqrt(N)) * dB[i]
+        dEvecs[i] = - (1/(2*N)) * suma2 * evecs[i] * dt + (1/np.sqrt(N)) * suma3
 
-    return dE
+    return (dEvals, dEvecs)
 
-def EvalsEvolution(eigens):
+def EvalsEvolution(evals):
     dB = np.random.normal(0, 1, N)
-    dE = np.zeros(N, dtype = complex)
+    dEvals = np.zeros(N, dtype = float)
 
     for i in range(N):
         suma1 = 0
         for j in range(N):
             if i != j:
-                delta = 1/(eigens[i] - eigens[j])
+                delta = 1/(evals[i] - evals[j])
                 suma1 += delta
-        dE[i] = - potentialDerivative(eigens[i]) * dt + (1/N) * suma1 * dt + (1/np.sqrt(N)) * dB[i]
+        dEvals[i] = - potentialDerivative(evals[i]) * dt + (1/N) * suma1 * dt + (1/np.sqrt(N)) * dB[i]
 
-    return dE
+    return dEvals
 
-def EigensNorm(eigens):
-    for i in range(N):
-        eigens[1:N+1, i] = eigens[1:N+1, i] / np.linalg.norm(eigens[1:N+1, i])
-    return eigens    
 
-#==================================PLOT_FUNCTIONS=================================
+#==================================PLOT_FUNCTIONS======================================
 
-def EigensPlot(eigens):
+def EigensPlot(evals, evecs):
     rez = np.zeros((N,N))
-    for i in range(1,N+1):
+    for i in range(N):
         for j in range(N):
-            rez[i-1,j] = abs(eigens[i,j])
+            rez[i,j] = abs(evecs[i,j])
 
     fig,ax = plt.subplots(1,2)
     cax = ax[0].matshow(rez)
 
-    x = np.linspace(eigens[0,0] * 1.2, eigens[0,N-1] * 1.2,  1001)
+    x = np.linspace(evals[0] * 1.2, evals[N-1] * 1.2,  1001)
     ax[1].plot(x, potentialV(x), color='red')
-    #ax[1].scatter(eigens[0,:], [potentialV(x) for x in eigens[0,:]])
-    ax[1].scatter(eigens[0,:], [0 for x in range(N)])
+    #ax[1].scatter(evals, [potentialV(x) for x in evals])
+    ax[1].scatter(evals, [0 for x in range(N)])
     ax[1].scatter([np.sqrt(k), -np.sqrt(k)], [0,0])
 
     fig.colorbar(cax)
 
-    fig.show()
-
 #==================================MAIN============================================
 
-eig = Eigens()
-evals = eig[0,:]
-
-for i in range(t):
+evals, _ = Eigens()
+for i in range(1):
     evals += EvalsEvolution(evals)
 
-eig = np.concatenate(([evals], np.identity(N)), axis = 0)
+evecs = np.identity(N, dtype=complex)
 
 for i in range(t):
-    eig += EigensEvolution(eig)
-    eig = EigensNorm(eig)
+    dEvals, dEvecs = EigensEvolution(evals, evecs)
+    evals += dEvals
+    evecs += dEvecs
 
-eig = eig[:, np.argsort(eig[0,:].real)]
+    #evecs = evecs[np.argsort(evals)]             #sorts the eigenvectors by ascending eigenvalues
+    #evals = evals[np.argsort(evals)]
+    #evecs, _ = np.linalg.qr(evecs)
 
-EigensPlot(eig)
+
+EigensPlot(evals, evecs)
 plt.show()
