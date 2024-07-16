@@ -10,7 +10,7 @@ large_width = 400
 np.set_printoptions(linewidth=large_width)
 
 N = 100
-k = 2.2
+k = 4
 order = 1
 
 #===================================AUXILIARY_FUNCTIONS=====================================
@@ -82,14 +82,12 @@ nextM = np.zeros((N,N), dtype = complex)
 
 acceptanceProbability = 0
 terminationCounter = 0
-counter = 0
 
 while(1):
 # TODO: find better way to determine when minimum is found
     if terminationCounter == 1000000:                                                                            
         break
     nextM = M.copy()
-    print(terminationCounter)
 
     for i in range(order):
         index1, index2 = np.random.randint(0, N, size = 2)
@@ -102,10 +100,8 @@ while(1):
     u = np.random.random()
     if u < min(1, np.exp(lnAcceptanceProbability)) :
         M = nextM.copy()
-        counter += 1
-        #print(terminationCounter, counter)
     terminationCounter += 1
-
+#less likely to accept bad moves the closer you are to the equilibrium
 # V diagonalizes nextM, U diagonalizes M
 (evals, U) = np.linalg.eigh(originalM)
 (evals, V) = np.linalg.eigh(M)                                                                      
@@ -114,12 +110,9 @@ while(1):
 Udag = np.transpose( np.matrix.conjugate(U) )                                                       
 rez = np.matmul( np.matmul(Udag, V), U)
 
-
 #######################################PLOTS#########################################
 
-#PlotMatrix(originalM, 'Original matrix')
-PlotMatrix(rez, 'Transformation matrix')
-PlotMatrix(M, 'Final matrix')
+PlotMatrix(rez, 'Transformation matrix, N={}, k={}'.format(N,k))
 evals, _ = np.linalg.eigh(M)
 xlinsp = np.linspace(-1.3*min(evals), 1.3*max(evals))
 figh, axh = plt.subplots()
