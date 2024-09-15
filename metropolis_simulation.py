@@ -3,6 +3,7 @@
 import numpy as np
 import scipy
 import matplotlib.pyplot as plt
+from scipy.integrate import quad
 
 #=================================PARAMETERS&GLOBAL_VARIABLES=================================
 
@@ -10,112 +11,113 @@ large_width = 400
 np.set_printoptions(linewidth=large_width)
 
 N = 100
-k = 4
-order = 1
+k = 16
+pertBase = 1
+refSteps = 500000
+steps = 1000000
 
 #===================================AUXILIARY_FUNCTIONS=====================================
 
 def potentialV(x):
     return x**4/4 - k*x**2/2
 
-def EquilibriumFunction(x):
-    ret = np.zeros(N, dtype = float)
-    for i in range(N):
-        sum = 0
-        for j in range(N):
-            if i != j:
-                sum += 1/np.abs(x[i] - x[j])
-        ret[i] = -N * (x[i]**3 - k * x[i]) + sum
-    return ret
-
-def EquilibriumFunctionJacobian(x):
-    ret = np.zeros((N,N), dtype = float)
-    for i in range(N):
-        sum = 0
-        for j in range(N):
-            if i > j:
-                ret[i][j] = -1/(x[i] - x[j])**2
-                sum += 1/(x[i] - x[j])**2
-            if i < j:
-                ret[i][j] = 1/(x[i] - x[j])**2
-                sum += -1/(x[i] - x[j])**2
-        ret[i][i] = -N * (3 * x[i]**2 - k) + sum
-    return ret
-
 def GenerateMatrix():
-    initialGuess = np.zeros(N, dtype = float)
-    for i in range(N):
-        if i < N/2:
-            initialGuess[i] = np.random.normal(-np.sqrt(k), 1)
-        else:
-            initialGuess[i] = np.random.normal(np.sqrt(k), 1)
-
-    sol  = scipy.optimize.root(EquilibriumFunction, initialGuess, jac=EquilibriumFunctionJacobian)     
-    diag = sol.x
-    diag.sort()
-    M = np.zeros((N,N), dtype=complex)
-    for i in range(N):
-        M[i][i] = diag[i]
+    M = np.random.normal(0, 1/2, (N,N)) + 1j * np.random.normal(0, 1/2, (N,N))                          
+    M = ( M + M.conj().T ) / 2
     return M                                                            
 
 def Potential(M):
     return np.linalg.matrix_power(M, 4)/4 - k * np.linalg.matrix_power(M, 2) / 2
 
-# acceptance probability is given as p(x_{n+1})/p(x_n)
-# where x_n is matrix M at n-th step
-def LnAcceptanceProbabilityFunction(A,B):                                                           
-    tmp = np.real( np.trace( Potential(A) - Potential(B) ) )                                        
+def LnAcceptanceProbabilityFunction(A):                                                           
+    tmp = np.real( np.trace(Potential(A)) )
     return - N * tmp
 
-def PlotMatrix(matrix, title):
+def PlotMatrix(matrix, title, cond):
     ret = np.absolute(matrix)
-    fig1,ax1 = plt.subplots()
-    cax = ax1.matshow(ret)
-    ax1.set_title(title)
-    fig1.colorbar(cax)
+    if cond == 1:
+        fig,ax = plt.subplots(1,2)
+        cax = ax[0].matshow(ret)
+        ax[0].set_title(title)
+        fig.colorbar(cax)
+        
+        evals, _ = np.linalg.eigh(matrix)
+        xlinsp = np.linspace(-1.3*min(evals), 1.3*max(evals))
+        ax[1].scatter(evals, [potentialV(t) for t in evals], color='red')
+    else:
+        fig,ax = plt.subplots()
+        cax = ax.matshow(ret)
+        ax.set_title(title)
+        fig.colorbar(cax)
 
-#===================================METROPOLIS_STEP_FUNCTION=====================================
+def Transformation(A,B):
+    (evals, U) = np.linalg.eigh(A)
 
-M = GenerateMatrix()
-originalM = M.copy()
-nextM = np.zeros((N,N), dtype = complex)
+    Udag = np.transpose( np.matrix.conjugate(U) )                                                       
+    M = np.matmul( np.matmul(Udag, B), U)
 
-acceptanceProbability = 0
-terminationCounter = 0
+    (evals, V) = np.linalg.eigh(M)
 
-while(1):
-# TODO: find better way to determine when minimum is found
-    if terminationCounter == 1000000:                                                                            
-        break
-    nextM = M.copy()
+    return V
+        
 
-    for i in range(order):
-        index1, index2 = np.random.randint(0, N, size = 2)
-        noise = np.random.normal(0, 1/2) + 1j * np.random.normal(0, 1/2)
-        nextM[index1, index2] += noise
-        nextM[index2, index1] += np.conjugate(noise)
+#===================================METROPOLIS_EVOLUTION===============================================
 
-    lnAcceptanceProbability = LnAcceptanceProbabilityFunction(nextM, M)
+def Metropolis(S, step):
+    acceptanceProbability = 0
+    count = 0
+    acceptCount = 0
+    
+    origVec = []
+    for i in range(pertBase):
+        origVec.append((0,0,0))
+        
+    while(count < step):
+    # TODO: find better way to determine when minimum is found
+        pert = pertBase
 
-    u = np.random.random()
-    if u < min(1, np.exp(lnAcceptanceProbability)) :
-        M = nextM.copy()
-    terminationCounter += 1
-#less likely to accept bad moves the closer you are to the equilibrium
-# V diagonalizes nextM, U diagonalizes M
-(evals, U) = np.linalg.eigh(originalM)
-(evals, V) = np.linalg.eigh(M)                                                                      
+        if count % 1000 == 0:
+            print(count)
 
-# V in the basis where M is diagonal is of the form U.conj().T * V * U
-Udag = np.transpose( np.matrix.conjugate(U) )                                                       
-rez = np.matmul( np.matmul(Udag, V), U)
+        lnAcceptanceProbability = -LnAcceptanceProbabilityFunction(S)
 
-#######################################PLOTS#########################################
+        for i in range(pert):
+            index1, index2 = np.random.randint(0, N, size = 2)
+            noise = np.random.normal(0, 1/2) + 1j * np.random.normal(0, 1/2)
+            origVec[i] = (index1, index2, S[index1, index2])
+            S[index1, index2] += noise
+            S[index2, index1] += np.conjugate(noise)
 
-PlotMatrix(rez, 'Transformation matrix, N={}, k={}'.format(N,k))
-evals, _ = np.linalg.eigh(M)
-xlinsp = np.linspace(-1.3*min(evals), 1.3*max(evals))
-figh, axh = plt.subplots()
-axh.plot(xlinsp, [potentialV(t) for t in xlinsp])
-axh.scatter(evals, [potentialV(t) for t in evals], color='red')
+        lnAcceptanceProbability += LnAcceptanceProbabilityFunction(S)
+
+        u = np.random.random()
+        if u < min(1, np.exp(lnAcceptanceProbability)) :
+            acceptCount += 1
+        else:
+            for i in range(pert):
+                ind1, ind2, val = origVec[i]
+                S[ind1, ind2] = val
+                S[ind2, ind1] = np.conjugate(val)
+                
+        count += 1
+    print(acceptCount)
+
+    return S
+
+#============================================MAIN======================================================
+
+M = GenerateMatrix().copy()
+PlotMatrix(M, 'M', 1)
+
+Q = Metropolis(M, refSteps).copy()
+PlotMatrix(Q, 'Q', 1)
+
+# L, _ = np.linalg.eigh(Q)
+# K = np.diag(L)
+# F = Metropolis(K, steps).copy()
+
+F = Metropolis(Q, steps).copy()
+PlotMatrix(F, 'F', 1)
+
+PlotMatrix(Transformation(K, F), 'Q F, N={}, k={}'.format(N,k), 0)
 plt.show()
