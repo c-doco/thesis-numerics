@@ -15,7 +15,7 @@ kmin = 0
 kmax = 0
 ksteps = int((kmax - kmin) * 10 + 1)
 
-steps = 1000000
+steps = 500000
 evalsSteps = 20000
 dt = 1/2000
 noiseVarianceBase = 1
@@ -62,7 +62,7 @@ def EigensEvolution(evals, evecs, steps, k):
 
     for t in range(steps):
         if t < steps/50:
-            noiseVariance = noiseVarianceBase * 4
+            noiseVariance = noiseVarianceBase * 5
         elif t < steps/2:
             noiseVariance = noiseVarianceBase * 0.5
         else:
@@ -84,8 +84,8 @@ def EigensEvolution(evals, evecs, steps, k):
             if(np.any(np.isnan(tmp)) or np.any(np.isinf(tmp))):
                 raise ValueError('Nan or Inf')
             evals += tmp
-            evecs += - np.matmul( evecs, - np.diag(Vdd(evals,k)) - 2*np.diag( np.sum( np.multiply(D,D), axis=1 ) )/N + np.multiply(W, D)  ) * dt
-            
+            # evecs += - np.matmul( evecs, - np.diag(Vdd(evals,k)) - 2*np.diag( np.sum( np.multiply(D,D), axis=1 ) )/N + np.multiply(W, D)  ) * dt
+            evecs += ( - np.multiply( evecs, Vdd(evals,k) + 2*np.sum( np.multiply(D,D), axis=1 ) / N ) + np.matmul(evecs, np.multiply(W,D) ) ) * dt
         except ValueError:
            print('kurcina')
            t = t-1
