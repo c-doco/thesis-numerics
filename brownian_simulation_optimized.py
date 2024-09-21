@@ -7,18 +7,20 @@ from scipy.optimize import minimize
 
 #==================================PARAMETERS==========================================
 large_width = 400
-np.set_printoptions(linewidth=large_width)
+np.set_printoptions(linewidth=large_width, precision=2)
 
 N = 100
 
-kmin = 0
-kmax = 0
-ksteps = int((kmax - kmin) * 10 + 1)
+#PUNKKLA
+kmin =10
+kmax =10
+#PUNKLA
+ksteps = int((kmax - kmin) * 4 + 1)
 
-steps = 500000
-evalsSteps = 20000
-dt = 1/2000
-noiseVarianceBase = 1
+steps = 1
+evalsSteps = 0
+dt = 1/5000
+noiseVarianceBase = 100
 
 #===========================EIGENVALUES_&_EIGENVECTORS==================================
 
@@ -38,7 +40,7 @@ def Vd(x, k):
     return x*x*x - k*x
 
 def Vdd(x, k):
-    return 3*x*x - k
+    return 0*x
 
 def negLogProb(N, data):
     n = len(data)
@@ -61,16 +63,14 @@ def EigensEvolution(evals, evecs, steps, k):
     D = np.zeros((N,N), dtype=float)
 
     for t in range(steps):
-        if t < steps/50:
-            noiseVariance = noiseVarianceBase * 5
-        elif t < steps/2:
-            noiseVariance = noiseVarianceBase * 0.5
-        else:
-            noiseVariance = noiseVarianceBase * 0.25
-
+        
+        #PUNKLA
+        noiseVariance = noiseVarianceBase * 0.35
+        #PUNKLA
+        
         if t % 10000 == 0:
             print(t)
-            
+           
         try:
             W = (np.random.normal(0, noiseVariance, (N,N)) + 1j * np.random.normal(0, noiseVariance, (N,N)))/np.sqrt(2)
             W = ( W + W.conj().T ) / 2
@@ -84,10 +84,9 @@ def EigensEvolution(evals, evecs, steps, k):
             if(np.any(np.isnan(tmp)) or np.any(np.isinf(tmp))):
                 raise ValueError('Nan or Inf')
             evals += tmp
-            # evecs += - np.matmul( evecs, - np.diag(Vdd(evals,k)) - 2*np.diag( np.sum( np.multiply(D,D), axis=1 ) )/N + np.multiply(W, D)  ) * dt
-            evecs += ( - np.multiply( evecs, Vdd(evals,k) + 2*np.sum( np.multiply(D,D), axis=1 ) / N ) + np.matmul(evecs, np.multiply(W,D) ) ) * dt
+            evecs += - ( np.multiply( evecs, Vdd(evals,k) + np.sum( np.multiply(D,D), axis=1 ) / (2*N) ) + np.matmul(evecs, np.multiply(W,D) ) ) * dt
         except ValueError:
-           print('kurcina')
+           print('Nan or Inf')
            t = t-1
            continue
 
@@ -95,12 +94,14 @@ def EigensEvolution(evals, evecs, steps, k):
         if np.all(evals[:-1] <= evals[1:]) == False:
             evecs = np.array([x for _, x in sorted(zip(evals, evecs))])             
             evals = np.sort(evals)
-        evecs, _ = np.linalg.qr(evecs)
+        # evecs, _ = np.linalg.qr(evecs)
+        print('\nevecs:\n',evecs)
+        print('\nOne:\n',np.matmul(evecs, np.conj(np.transpose(evecs))).diagonal().real)
 
     return (evals, evecs)
 
 def EvalsEvolution(evals, evalsSteps, k):
-    noiseVariance = 1
+    noiseVariance = 0
     for t in range(evalsSteps):
         dB = np.random.normal(0, noiseVariance, N)
         D = evals[:, np.newaxis] - evals
